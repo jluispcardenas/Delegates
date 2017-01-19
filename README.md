@@ -1,3 +1,5 @@
 # Delegates
-implementation of delegates metodology in C++
+
+Implementación de delegados en C++
+
 
