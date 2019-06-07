@@ -54,10 +54,11 @@ public:
 	R operator() (P1 a, P2 b) const {
 		assert(hp != NULL);
 		Callback<P1, P2, R> *cr = hp;
-		for (; cr != NULL; cr = cr->next) {
-			if (cr->next == NULL) break;
+		while (cr != NULL && cr->next != NULL) {
 			cr->invoke(a, b);
+			cr = cr->next;
 		}
+		
 		return cr->invoke(a, b);
 	}
 
