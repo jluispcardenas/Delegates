@@ -15,3 +15,5 @@ mDelegate.bind(suma);
 int result = mDelegate(2, 3);
 
 ```
+## Licence
+This project is licensed under the MIT License 
