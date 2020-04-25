@@ -1,6 +1,6 @@
 # Delegates
 
-Delegate implementation in C ++
+Implementation of *delegates* in C ++
 
 Use
 ```
