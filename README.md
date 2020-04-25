@@ -1,18 +1,17 @@
 # Delegates
 
-Implementación de delegados en C++
+Delegate implementation in C ++
 
-
-Example
-```c
-int suma(int a, int b) {
+Use
+```
+int sum(int a, int b) {
     return a + b;
 }
 
-delegate <int, int, int> miDelegado;
+delegate <int, int, int> mDelegate;
 
-miDelegado.bind(suma);
+mDelegate.bind(suma);
 
-int result = miDelegado(2, 3);
+int result = mDelegate(2, 3);
 
 ```
