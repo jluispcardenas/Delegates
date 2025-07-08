@@ -19,88 +19,132 @@
 
 ************************************************************************/
 
-#ifndef _DELEGATE_H_
-#define _DELEGATE_H_
-#include <assert.h>
+#ifndef DELEGATE_H_
+#define DELEGATE_H_
 
-#define int(a,b) a, b, int
-#define void(a,b) a, b, void
-#define GQUEUE(ep) if (hp==NULL) hp = tp = ep; \
-					else {tp->next = ep; tp = ep;}
+#include <vector>
+#include <functional>
+#include <memory>
+#include <algorithm>
 
-class Generic {};
+namespace delegates {
 
-template <class P1, class P2, class R=void>
-class delegate {
-public:
-	delegate() {
-		hp = tp = NULL;
-	}
+template<typename Signature>
+class delegate;
 
-	template <class T, class F>
-	inline void bind(T *a, R (F::*fc)(P1, P2)) {
-		a = static_cast<F*>(a);
-		Callback<P1, P2, R> *n = new Callback<P1, P2, R>;
-		n->attach(a, fc);
-		GQUEUE(n);
-	}
-
-	inline void bind(R (*fc)(P1, P2)) {
-		Callback<P1, P2, R> *n = new Callback<P1, P2, R>;
-		n->attach(fc);
-		GQUEUE(n);
-	}
-
-	R operator() (P1 a, P2 b) const {
-		assert(hp != NULL);
-		Callback<P1, P2, R> *cr = hp;
-		while (cr != NULL && cr->next != NULL) {
-			cr->invoke(a, b);
-			cr = cr->next;
-		}
-		
-		return cr->invoke(a, b);
-	}
-
-	operator bool () const {
-		return hp != NULL;
-	}
-
-	bool operator! () const {
-		return !(operator bool());
-	}
+template<typename R, typename... Args>
+class delegate<R(Args...)> {
 private:
-	template <class _P1, class _P2, class _R>
-	struct Callback {
-	public:
-		Callback() {
-			_that = NULL;
-		}
-		template <class T>
-		inline void attach(T *that,_R (T::*fc)(_P1, _P2)) {
-			assert(that != NULL);
-			_that = (Generic*)that;
-			_fc = (Gmfp)fc;
-		}
-		inline void attach(_R (*fc)(_P1, P2)) {
-			_that = NULL;
-			_fct = fc;
-		}
-		_R invoke(_P1 a, _P2 b) {
-			if (_that != NULL)
-				((*_that).*_fc)(a, b);
-			else
-				_fct(a, b);
-		}
-		Callback<_P1, _P2, R> *next;
-	private:
-		typedef _R (Generic::*Gmfp)(_P1, _P2);
-		Generic *_that;
-		Gmfp _fc;
-		R (*_fct)(_P1, _P2);
-	};
+    using function_type = std::function<R(Args...)>;
+    std::vector<function_type> callbacks_;
 
-	Callback<P1, P2, R> *hp, *tp;
+public:
+    delegate() = default;
+    
+    delegate(const delegate& other) : callbacks_(other.callbacks_) {}
+    
+    delegate(delegate&& other) noexcept : callbacks_(std::move(other.callbacks_)) {}
+    
+    delegate& operator=(const delegate& other) {
+        if (this != &other) {
+            callbacks_ = other.callbacks_;
+        }
+        return *this;
+    }
+    
+    delegate& operator=(delegate&& other) noexcept {
+        if (this != &other) {
+            callbacks_ = std::move(other.callbacks_);
+        }
+        return *this;
+    }
+    
+    template<typename F>
+    void bind(F&& func) {
+        callbacks_.emplace_back(std::forward<F>(func));
+    }
+    
+    template<typename T>
+    void bind(T* object, R (T::*method)(Args...)) {
+        static_assert(std::is_class_v<T>, "T must be a class type");
+        if (object == nullptr) {
+            throw std::invalid_argument("Object pointer cannot be null");
+        }
+        callbacks_.emplace_back([object, method](Args... args) -> R {
+            return (object->*method)(args...);
+        });
+    }
+    
+    template<typename T>
+    void bind(const T* object, R (T::*method)(Args...) const) {
+        static_assert(std::is_class_v<T>, "T must be a class type");
+        if (object == nullptr) {
+            throw std::invalid_argument("Object pointer cannot be null");
+        }
+        callbacks_.emplace_back([object, method](Args... args) -> R {
+            return (object->*method)(args...);
+        });
+    }
+    
+    template<typename F>
+    delegate& operator+=(F&& func) {
+        bind(std::forward<F>(func));
+        return *this;
+    }
+    
+    template<typename F>
+    delegate& operator-=(const F& func) {
+        auto it = std::find_if(callbacks_.begin(), callbacks_.end(),
+            [&func](const function_type& stored) {
+                return stored.target_type() == typeid(F);
+            });
+        if (it != callbacks_.end()) {
+            callbacks_.erase(it);
+        }
+        return *this;
+    }
+    
+    // Invocación del delegate
+    template<typename... CallArgs>
+    R operator()(CallArgs&&... args) const {
+        if (callbacks_.empty()) {
+            if constexpr (std::is_void_v<R>) {
+                return;
+            } else {
+                throw std::runtime_error("No callbacks bound to delegate");
+            }
+        }
+        
+        if constexpr (std::is_void_v<R>) {
+            for (const auto& callback : callbacks_) {
+                callback(std::forward<CallArgs>(args)...);
+            }
+        } else {
+            for (size_t i = 0; i < callbacks_.size() - 1; ++i) {
+                callbacks_[i](std::forward<CallArgs>(args)...);
+            }
+            return callbacks_.back()(std::forward<CallArgs>(args)...);
+        }
+    }
+    
+    explicit operator bool() const noexcept {
+        return !callbacks_.empty();
+    }
+    
+    bool operator!() const noexcept {
+        return callbacks_.empty();
+    }
+    
+    size_t size() const noexcept {
+        return callbacks_.size();
+    }
+    
+    void clear() noexcept {
+        callbacks_.clear();
+    }
+    
+    bool empty() const noexcept {
+        return callbacks_.empty();
+    }
 };
-
-#endif
+#endif // DELEGATE_H_
